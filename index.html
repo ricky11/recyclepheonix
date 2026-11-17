@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quiz Leaderboard</title>
+  <style>
+    :root {
+      /* Burgundy and gold sampled from the supplied CIS logo. */
+      --cis-burgundy: #682139;
+      --cis-gold: #b3a28e;
+      --cis-hover: #4b1729;
+      --cis-paper: #fffaf4;
+      --cis-tint: #f3ece4;
+      --cis-text: #30252a;
+    }
+    body {
+      font-family: Arial, sans-serif;
+      background-color: var(--cis-burgundy);
+      color: var(--cis-text);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 24px;
+      padding: 40px;
+      padding-bottom: 190px;
+    }
+    .school-logo {
+      position: fixed;
+      top: 16px;
+      left: 16px;
+      width: min(96px, 16vw);
+    }
+    .school-logo img { display: block; width: 100%; height: auto; }
+    .school-logo:focus-visible { outline: 2px solid var(--cis-gold); outline-offset: 4px; }
+    .page-header {
+      max-width: min(680px, calc(100% - 448px));
+    }
+    .page-header h1 { margin: 0 0 16px; }
+    .page-header h2 { margin: 0; }
+    .page-header h1, .page-header h2 { color: var(--cis-gold); }
+    .leaderboard-container {
+      position: fixed;
+      top: 25vh;
+      left: 25vw;
+      box-sizing: border-box;
+      background: var(--cis-paper);
+      border: 1px solid var(--cis-gold);
+      padding: 20px 30px;
+      border-radius: 8px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      width: 50vw;
+      height: 50vh;
+      overflow: auto;
+    }
+    .leaderboard-container table { table-layout: fixed; }
+    .leaderboard-container th, .leaderboard-container td { overflow-wrap: anywhere; }
+    h1, h2 {
+      text-align: center;
+      color: var(--cis-burgundy);
+      text-wrap: balance;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+    }
+    th, td {
+      padding: 10px;
+      text-align: left;
+      border-bottom: 1px solid var(--cis-gold);
+    }
+    th {
+      background-color: var(--cis-burgundy);
+      color: var(--cis-gold);
+    }
+    tr:nth-child(even) {
+      background-color: var(--cis-tint);
+    }
+    .countdown {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      padding: 16px;
+      border-radius: 8px;
+      background: var(--cis-paper);
+      border: 1px solid var(--cis-gold);
+      color: var(--cis-burgundy);
+      width: 224px;
+      box-sizing: border-box;
+    }
+    .title-3 { font-size: 16px; line-height: 24px; font-weight: 500; }
+    .heading-2 { font-size: 48px; line-height: 48px; font-weight: 600; }
+    .heading-4 { font-size: 30px; line-height: 36px; font-weight: 600; }
+    .button-sm { font-size: 14px; line-height: 20px; font-weight: 600; }
+    .caption-2 { font-size: 14px; line-height: 20px; font-weight: 400; }
+    .countdown output {
+      display: block;
+      margin: 8px 0;
+      font-variant-numeric: tabular-nums;
+    }
+    .countdown input {
+      width: 64px;
+      padding: 4px;
+      font: inherit;
+    }
+    .countdown button {
+      margin-top: 8px;
+      padding: 8px 12px;
+      border: 0;
+      border-radius: 4px;
+      background: var(--cis-burgundy);
+      color: var(--cis-gold);
+      cursor: pointer;
+    }
+    .countdown button:hover { background: var(--cis-hover); }
+    .countdown button:active { transform: scale(0.98); }
+    .countdown button:disabled { background: #666; cursor: not-allowed; transform: none; }
+    .countdown :focus-visible { outline: 2px solid var(--cis-burgundy); outline-offset: 2px; }
+    .countdown p { margin: 8px 0 0; text-wrap: pretty; }
+    .player-editor {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 150px;
+      box-sizing: border-box;
+      overflow: auto;
+      background: var(--cis-paper);
+      box-shadow: 0 0 8px rgba(0, 0, 0, 0.15);
+    }
+    .editor-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 8px 12px;
+    }
+    .editor-toolbar p { margin: 0; }
+    .editor-toolbar button {
+      flex-shrink: 0;
+      padding: 8px 12px;
+      border: 0;
+      border-radius: 4px;
+      background: var(--cis-burgundy);
+      color: var(--cis-gold);
+      cursor: pointer;
+    }
+    .editor-toolbar button:hover { background: var(--cis-hover); }
+    .editor-toolbar button:active { transform: scale(0.98); }
+    .player-editor table { margin-top: 0; table-layout: fixed; }
+    .player-editor th, .player-editor td { padding: 4px 8px; overflow-wrap: anywhere; }
+    .player-editor th:first-child { width: 48px; }
+    .player-editor [contenteditable="true"]:hover { background: var(--cis-tint); }
+    .player-editor :focus-visible { outline: 2px solid var(--cis-burgundy); outline-offset: -2px; }
+    .player-editor [aria-invalid="true"] { background: #fff0f0; outline: 2px solid #b00020; outline-offset: -2px; }
+    #players-validation { padding: 0 12px; margin: 0; color: #b00020; }
+    #players-validation:empty { display: none; }
+    @media (max-width: 1024px) {
+      body { flex-direction: column; align-items: center; gap: 24px; padding: 16px; padding-bottom: 174px; }
+      .page-header { max-width: 680px; }
+    }
+  </style>
+</head>
+<body>
+
+  <a class="school-logo" href="https://www.cis.edu.hk/" target="_blank" rel="noopener noreferrer">
+    <img src="cis-logo.png" alt="Chinese International School (CIS)" width="208" height="280">
+  </a>
+
+  <header class="page-header">
+    <h1 class="heading-2">Recycle Phoeonix</h1>
+    <h2 class="heading-4">Are you the fastest pheonix</h2>
+  </header>
+
+  <aside class="countdown" aria-label="Game timer">
+    <span class="title-3">Elapsed time</span>
+    <output id="time-remaining" class="heading-4" role="timer" aria-live="off">00:00</output>
+    <form id="timer-settings">
+      <label class="title-3" for="timer-minutes">Limit (minutes)</label>
+      <input id="timer-minutes" class="title-3" type="number" min="1" step="1" value="5" required>
+      <button id="start-game" class="button-sm" type="submit">Start Now</button>
+    </form>
+    <button id="stop-game" class="button-sm" type="button" disabled>STOP</button>
+    <button id="new-game" class="button-sm" type="button">New Game</button>
+    <p id="timer-status" class="caption-2" role="status">Enter a player name below, then click Start Now.</p>
+  </aside>
+
+  <div class="leaderboard-container">
+    <h2>🏆 Quiz Leaderboard</h2>
+    <table aria-label="Top six fastest players">
+      <thead>
+        <tr>
+          <th>Rank</th>
+          <th>Player</th>
+          <th>Time</th>
+        </tr>
+      </thead>
+      <tbody id="leaderboard-players">
+        <tr><td colspan="3">Play a game to see the top six players.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <section class="player-editor" aria-label="Edit player results">
+    <div class="editor-toolbar">
+      <p id="time-help" class="caption-2">Enter the next player's name, then click Start Now. Times are recorded automatically.</p>
+      <button id="add-player" class="button-sm" type="button">Add player</button>
+    </div>
+    <p id="players-validation" class="caption-2" role="status"></p>
+    <table aria-label="All player results" aria-describedby="time-help">
+      <thead>
+        <tr><th scope="col">Rank</th><th scope="col">Player</th><th scope="col">Time</th></tr>
+      </thead>
+      <tbody id="player-results">
+        <tr><td></td><td contenteditable="true" aria-label="Player name"></td><td contenteditable="true" aria-label="Player time" aria-describedby="time-help"></td></tr>
+        <tr><td></td><td contenteditable="true" aria-label="Player name"></td><td contenteditable="true" aria-label="Player time" aria-describedby="time-help"></td></tr>
+        <tr><td></td><td contenteditable="true" aria-label="Player name"></td><td contenteditable="true" aria-label="Player time" aria-describedby="time-help"></td></tr>
+        <tr><td></td><td contenteditable="true" aria-label="Player name"></td><td contenteditable="true" aria-label="Player time" aria-describedby="time-help"></td></tr>
+        <tr><td></td><td contenteditable="true" aria-label="Player name"></td><td contenteditable="true" aria-label="Player time" aria-describedby="time-help"></td></tr>
+        <tr><td></td><td contenteditable="true" aria-label="Player name"></td><td contenteditable="true" aria-label="Player time" aria-describedby="time-help"></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <script>
+    const playerResults = document.getElementById('player-results');
+    const leaderboardPlayers = document.getElementById('leaderboard-players');
+    const validation = document.getElementById('players-validation');
+
+    // Accept whole seconds or minutes:seconds, and sort by numeric duration.
+    function parseTime(value) {
+      if (!/^(?:\d+|\d+:[0-5]\d)$/.test(value)) return null;
+      const parts = value.split(':').map(Number);
+      const seconds = parts.length === 2 ? parts[0] * 60 + parts[1] : parts[0];
+      return Number.isSafeInteger(seconds) ? seconds : null;
+    }
+
+    function formatTime(seconds) {
+      return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+    }
+
+    function updateLeaderboard() {
+      const players = [];
+      let hasInvalidResult = false;
+      for (const row of playerResults.rows) {
+        const name = row.cells[1].textContent.trim();
+        const time = row.cells[2].textContent.trim();
+        const seconds = parseTime(time);
+        const invalidTime = time !== '' && seconds === null;
+        const missingName = time !== '' && name === '';
+        row.cells[0].textContent = '';
+        row.cells[1].setAttribute('aria-invalid', String(missingName));
+        row.cells[2].setAttribute('aria-invalid', String(invalidTime));
+        hasInvalidResult ||= invalidTime || missingName;
+        if (name && seconds !== null) players.push({ name, seconds, row });
+      }
+      validation.textContent = hasInvalidResult
+        ? 'Check highlighted cells: enter a player name and a time in whole seconds or m:ss (for example, 75 or 1:15).'
+        : '';
+
+      // Only rebuild the display table so typing in the editor keeps its cursor.
+      players.sort((a, b) => a.seconds - b.seconds);
+      leaderboardPlayers.replaceChildren();
+      players.forEach((player, index) => {
+        player.row.cells[0].textContent = index + 1;
+        if (index >= 6) return;
+        const row = leaderboardPlayers.insertRow();
+        const time = formatTime(player.seconds);
+        for (const value of [index + 1, player.name, time]) {
+          row.insertCell().textContent = value;
+        }
+      });
+      if (players.length === 0) {
+        const cell = leaderboardPlayers.insertRow().insertCell();
+        cell.colSpan = 3;
+        cell.textContent = 'Play a game to see the top six players.';
+      }
+    }
+
+    playerResults.addEventListener('input', updateLeaderboard);
+    function addPlayer() {
+      const row = playerResults.insertRow();
+      row.insertCell();
+      for (const label of ['Player name', 'Player time']) {
+        const cell = row.insertCell();
+        cell.contentEditable = 'true';
+        cell.setAttribute('aria-label', label);
+        if (label === 'Player time') cell.setAttribute('aria-describedby', 'time-help');
+      }
+      return row;
+    }
+    document.getElementById('add-player').addEventListener('click', () => {
+      addPlayer().cells[1].focus();
+    });
+    updateLeaderboard();
+
+    // Change this value to adjust the default game limit in minutes.
+    const DEFAULT_MINUTES = 5;
+    const display = document.getElementById('time-remaining');
+    const minutesInput = document.getElementById('timer-minutes');
+    const startButton = document.getElementById('start-game');
+    const stopButton = document.getElementById('stop-game');
+    const newGameButton = document.getElementById('new-game');
+    const status = document.getElementById('timer-status');
+    let startedAt;
+    let limitSeconds;
+    let lastSeconds = 0;
+    let interval;
+    let audioContext;
+    let running = false;
+    let activeRow;
+
+    function beep() {
+      if (!audioContext || audioContext.state !== 'running') return;
+
+      // Generate a short, quiet tone without needing an audio file.
+      const oscillator = audioContext.createOscillator();
+      const volume = audioContext.createGain();
+      const now = audioContext.currentTime;
+      oscillator.frequency.value = 880;
+      volume.gain.setValueAtTime(0, now);
+      volume.gain.linearRampToValueAtTime(0.1, now + 0.01);
+      volume.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+      oscillator.connect(volume);
+      volume.connect(audioContext.destination);
+      oscillator.start(now);
+      oscillator.stop(now + 0.1);
+      oscillator.onended = () => {
+        oscillator.disconnect();
+        volume.disconnect();
+      };
+    }
+
+    function elapsedSeconds() {
+      // Measure real elapsed time so delayed callbacks do not slow the game.
+      return Math.min(limitSeconds, Math.floor((performance.now() - startedAt) / 1000));
+    }
+
+    function finishGame() {
+      if (!running) return;
+      const seconds = elapsedSeconds();
+      running = false;
+      clearInterval(interval);
+      display.textContent = formatTime(seconds);
+      activeRow.cells[2].textContent = display.textContent;
+      updateLeaderboard();
+      stopButton.disabled = true;
+      newGameButton.disabled = false;
+      status.textContent = `${seconds === limitSeconds ? 'Time is up. ' : ''}Recorded ${display.textContent}. Click New Game for the next player.`;
+    }
+
+    function updateTimer() {
+      if (!running) return;
+      const seconds = elapsedSeconds();
+      if (seconds !== lastSeconds) {
+        lastSeconds = seconds;
+        display.textContent = formatTime(seconds);
+        beep();
+      }
+      if (seconds === limitSeconds) finishGame();
+    }
+
+    async function enableBeeps() {
+      try {
+        // Start Now supplies the user click browsers require for audio.
+        audioContext ??= new AudioContext();
+        await audioContext.resume();
+        if (audioContext.state !== 'running') {
+          throw new Error('Audio playback was blocked by the browser.');
+        }
+      } catch (error) {
+        console.error('Could not enable timer beeps:', error);
+        if (running) status.textContent = 'Timer running without beeps. Check browser audio permissions before the next game.';
+      }
+    }
+
+    document.getElementById('timer-settings').addEventListener('submit', (event) => {
+      event.preventDefault();
+      if (running || startButton.disabled || !minutesInput.reportValidity()) return;
+
+      // Use the first named player who does not already have a recorded time.
+      activeRow = [...playerResults.rows].find(row =>
+        row.cells[1].textContent.trim() && !row.cells[2].textContent.trim());
+      if (!activeRow) {
+        status.textContent = 'Enter the next player name in a row with an empty time, then click Start Now.';
+        const emptyRow = [...playerResults.rows].find(row =>
+          !row.cells[1].textContent.trim() && !row.cells[2].textContent.trim());
+        (emptyRow || addPlayer()).cells[1].focus();
+        return;
+      }
+
+      limitSeconds = minutesInput.valueAsNumber * 60;
+      startedAt = performance.now();
+      lastSeconds = 0;
+      running = true;
+      display.textContent = formatTime(0);
+      startButton.disabled = true;
+      stopButton.disabled = false;
+      newGameButton.disabled = true;
+      minutesInput.disabled = true;
+      status.textContent = `Timing ${activeRow.cells[1].textContent.trim()}. Click STOP to record the result.`;
+      enableBeeps();
+      interval = setInterval(updateTimer, 100);
+    });
+
+    stopButton.addEventListener('click', finishGame);
+    newGameButton.addEventListener('click', () => {
+      if (running) return;
+      display.textContent = formatTime(0);
+      startButton.disabled = false;
+      minutesInput.disabled = false;
+      status.textContent = 'Enter a player name below, then click Start Now.';
+    });
+
+    minutesInput.value = DEFAULT_MINUTES;
+  </script>
+</body>
+</html>
