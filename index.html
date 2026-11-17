@@ -55,6 +55,12 @@
     }
     .leaderboard-container table { table-layout: fixed; }
     .leaderboard-container th, .leaderboard-container td { overflow-wrap: anywhere; }
+    .leaderboard-container .top-six-player td {
+      font-size: 18px;
+      line-height: 28px;
+      font-weight: 700;
+    }
+    .leaderboard-container .ranking-medal { font-size: 130%; }
     h1, h2 {
       text-align: center;
       color: var(--cis-burgundy);
@@ -154,8 +160,8 @@
     .player-editor [contenteditable="true"]:hover { background: var(--cis-tint); }
     .player-editor :focus-visible { outline: 2px solid var(--cis-burgundy); outline-offset: -2px; }
     .player-editor [aria-invalid="true"] { background: #fff0f0; outline: 2px solid #b00020; outline-offset: -2px; }
-    #players-validation { padding: 0 12px; margin: 0; color: #b00020; }
-    #players-validation:empty { display: none; }
+    #players-validation, #storage-status { padding: 0 12px; margin: 0; color: #b00020; }
+    #players-validation:empty, #storage-status:empty { display: none; }
     @media (max-width: 1024px) {
       body { flex-direction: column; align-items: center; gap: 24px; padding: 16px; padding-bottom: 174px; }
       .page-header { max-width: 680px; }
@@ -169,8 +175,8 @@
   </a>
 
   <header class="page-header">
-    <h1 class="heading-2">Recycle Phoeonix</h1>
-    <h2 class="heading-4">Are you the fastest pheonix</h2>
+    <h1 class="heading-2">Recycle Phoenix </h1>
+    <h2 class="heading-4">How fast can you save planet earth?</h2>
   </header>
 
   <aside class="countdown" aria-label="Game timer">
@@ -208,17 +214,18 @@
       <button id="add-player" class="button-sm" type="button">Add player</button>
     </div>
     <p id="players-validation" class="caption-2" role="status"></p>
+    <p id="storage-status" class="caption-2" role="status"></p>
     <table aria-label="All player results" aria-describedby="time-help">
       <thead>
         <tr><th scope="col">Rank</th><th scope="col">Player</th><th scope="col">Time</th></tr>
       </thead>
       <tbody id="player-results">
-        <tr><td></td><td contenteditable="true" aria-label="Player name"></td><td contenteditable="true" aria-label="Player time" aria-describedby="time-help"></td></tr>
-        <tr><td></td><td contenteditable="true" aria-label="Player name"></td><td contenteditable="true" aria-label="Player time" aria-describedby="time-help"></td></tr>
-        <tr><td></td><td contenteditable="true" aria-label="Player name"></td><td contenteditable="true" aria-label="Player time" aria-describedby="time-help"></td></tr>
-        <tr><td></td><td contenteditable="true" aria-label="Player name"></td><td contenteditable="true" aria-label="Player time" aria-describedby="time-help"></td></tr>
-        <tr><td></td><td contenteditable="true" aria-label="Player name"></td><td contenteditable="true" aria-label="Player time" aria-describedby="time-help"></td></tr>
-        <tr><td></td><td contenteditable="true" aria-label="Player name"></td><td contenteditable="true" aria-label="Player time" aria-describedby="time-help"></td></tr>
+        <tr><td></td><td contenteditable="true" aria-label="Player name"></td><td></td></tr>
+        <tr><td></td><td contenteditable="true" aria-label="Player name"></td><td></td></tr>
+        <tr><td></td><td contenteditable="true" aria-label="Player name"></td><td></td></tr>
+        <tr><td></td><td contenteditable="true" aria-label="Player name"></td><td></td></tr>
+        <tr><td></td><td contenteditable="true" aria-label="Player name"></td><td></td></tr>
+        <tr><td></td><td contenteditable="true" aria-label="Player name"></td><td></td></tr>
       </tbody>
     </table>
   </section>
@@ -227,6 +234,9 @@
     const playerResults = document.getElementById('player-results');
     const leaderboardPlayers = document.getElementById('leaderboard-players');
     const validation = document.getElementById('players-validation');
+    const storageStatus = document.getElementById('storage-status');
+    const STORAGE_KEY = 'recyclepheonix.player-results.v1';
+    let storageReady = false;
 
     // Accept whole seconds or minutes:seconds, and sort by numeric duration.
     function parseTime(value) {
@@ -266,8 +276,19 @@
         player.row.cells[0].textContent = index + 1;
         if (index >= 6) return;
         const row = leaderboardPlayers.insertRow();
+        row.classList.add('top-six-player');
         const time = formatTime(player.seconds);
-        for (const value of [index + 1, player.name, time]) {
+        const rank = index + 1;
+        const rankCell = row.insertCell();
+        rankCell.textContent = String(rank);
+        if (rank <= 3) {
+          const medal = document.createElement('span');
+          medal.className = 'ranking-medal';
+          medal.setAttribute('aria-hidden', 'true');
+          medal.textContent = ['🥇', '🥈', '🥉'][index];
+          rankCell.append(' ', medal);
+        }
+        for (const value of [player.name, time]) {
           row.insertCell().textContent = value;
         }
       });
@@ -276,23 +297,59 @@
         cell.colSpan = 3;
         cell.textContent = 'Play a game to see the top six players.';
       }
+      savePlayerResults();
     }
 
     playerResults.addEventListener('input', updateLeaderboard);
     function addPlayer() {
       const row = playerResults.insertRow();
       row.insertCell();
-      for (const label of ['Player name', 'Player time']) {
-        const cell = row.insertCell();
-        cell.contentEditable = 'true';
-        cell.setAttribute('aria-label', label);
-        if (label === 'Player time') cell.setAttribute('aria-describedby', 'time-help');
-      }
+      const nameCell = row.insertCell();
+      nameCell.contentEditable = 'true';
+      nameCell.setAttribute('aria-label', 'Player name');
+      row.insertCell();
       return row;
+    }
+    function loadPlayerResults() {
+      try {
+        const saved = window.localStorage.getItem(STORAGE_KEY);
+        if (saved !== null) {
+          const results = JSON.parse(saved);
+          if (!Array.isArray(results) || !results.every(player =>
+            player && typeof player.name === 'string' && typeof player.time === 'string')) {
+            throw new Error('Saved player results have an invalid format.');
+          }
+          while (playerResults.rows.length < results.length) addPlayer();
+          results.forEach((player, index) => {
+            playerResults.rows[index].cells[1].textContent = player.name;
+            playerResults.rows[index].cells[2].textContent = player.time;
+          });
+        }
+        storageReady = true;
+      } catch (error) {
+        console.error('Could not load player results:', error);
+        storageStatus.textContent = 'Could not load saved player results. Browser storage may be unavailable or the saved data may be invalid.';
+      }
+    }
+    function savePlayerResults() {
+      if (!storageReady) return;
+      try {
+        const results = [...playerResults.rows].map(row => ({
+          name: row.cells[1].textContent,
+          time: row.cells[2].textContent
+        }));
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(results));
+        storageStatus.textContent = '';
+      } catch (error) {
+        console.error('Could not save player results:', error);
+        storageStatus.textContent = 'Could not save player results. Browser storage may be unavailable.';
+      }
     }
     document.getElementById('add-player').addEventListener('click', () => {
       addPlayer().cells[1].focus();
+      savePlayerResults();
     });
+    loadPlayerResults();
     updateLeaderboard();
 
     // Change this value to adjust the default game limit in minutes.
@@ -386,7 +443,9 @@
         status.textContent = 'Enter the next player name in a row with an empty time, then click Start Now.';
         const emptyRow = [...playerResults.rows].find(row =>
           !row.cells[1].textContent.trim() && !row.cells[2].textContent.trim());
-        (emptyRow || addPlayer()).cells[1].focus();
+        const row = emptyRow || addPlayer();
+        if (!emptyRow) savePlayerResults();
+        row.cells[1].focus();
         return;
       }
 
