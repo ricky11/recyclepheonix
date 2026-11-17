@@ -53,11 +53,12 @@
       height: 50vh;
       overflow: auto;
     }
-    .leaderboard-container table { table-layout: fixed; }
+    .leaderboard-container h2 { margin-bottom: 2rem; }
+    .leaderboard-container table { table-layout: fixed; margin-top: 0; }
     .leaderboard-container th, .leaderboard-container td { overflow-wrap: anywhere; }
     .leaderboard-container .top-six-player td {
-      font-size: 18px;
-      line-height: 28px;
+      font-size: 42px;
+      line-height: 42px;
       font-weight: 700;
     }
     .leaderboard-container .ranking-medal { font-size: 130%; }
@@ -236,20 +237,30 @@
     const validation = document.getElementById('players-validation');
     const storageStatus = document.getElementById('storage-status');
     const STORAGE_KEY = 'recyclepheonix.player-results.v1';
+    const MEDALS = ['🥇', '🥈', '🥉'];
     let storageReady = false;
 
-    // Accept whole seconds or minutes:seconds, and sort by numeric duration.
+    // Parse a time entered as seconds or minutes:seconds.
     function parseTime(value) {
-      if (!/^(?:\d+|\d+:[0-5]\d)$/.test(value)) return null;
-      const parts = value.split(':').map(Number);
-      const seconds = parts.length === 2 ? parts[0] * 60 + parts[1] : parts[0];
+      const match = value.match(/^(\d+)(?::([0-5]\d))?$/);
+      if (!match) return null;
+      const seconds = match[2] === undefined
+        ? Number(match[1])
+        : Number(match[1]) * 60 + Number(match[2]);
       return Number.isSafeInteger(seconds) ? seconds : null;
     }
 
+    // Format elapsed seconds as minutes:seconds.
     function formatTime(seconds) {
       return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
     }
 
+    // Compare valid results by their recorded time.
+    function comparePlayerTimes(first, second) {
+      return first.seconds - second.seconds;
+    }
+
+    // Sort results, refresh both tables, and persist the editor values.
     function updateLeaderboard() {
       const players = [];
       let hasInvalidResult = false;
@@ -269,29 +280,29 @@
         ? 'Check highlighted cells: enter a player name and a time in whole seconds or m:ss (for example, 75 or 1:15).'
         : '';
 
-      // Only rebuild the display table so typing in the editor keeps its cursor.
-      players.sort((a, b) => a.seconds - b.seconds);
+      players.sort(comparePlayerTimes);
       leaderboardPlayers.replaceChildren();
-      players.forEach((player, index) => {
-        player.row.cells[0].textContent = index + 1;
-        if (index >= 6) return;
+      for (let index = 0; index < players.length; index++) {
+        const player = players[index];
+        const rank = index + 1;
+        player.row.cells[0].textContent = String(rank);
+        if (rank > 6) continue;
+
         const row = leaderboardPlayers.insertRow();
         row.classList.add('top-six-player');
-        const time = formatTime(player.seconds);
-        const rank = index + 1;
         const rankCell = row.insertCell();
         rankCell.textContent = String(rank);
-        if (rank <= 3) {
+        if (rank <= MEDALS.length) {
           const medal = document.createElement('span');
           medal.className = 'ranking-medal';
           medal.setAttribute('aria-hidden', 'true');
-          medal.textContent = ['🥇', '🥈', '🥉'][index];
+          medal.textContent = MEDALS[index];
           rankCell.append(' ', medal);
         }
-        for (const value of [player.name, time]) {
-          row.insertCell().textContent = value;
-        }
-      });
+        row.insertCell().textContent = player.name;
+        row.insertCell().textContent = formatTime(player.seconds);
+      }
+
       if (players.length === 0) {
         const cell = leaderboardPlayers.insertRow().insertCell();
         cell.colSpan = 3;
@@ -300,30 +311,38 @@
       savePlayerResults();
     }
 
-    playerResults.addEventListener('input', updateLeaderboard);
+    // Add a player row with an editable name and a read-only time.
     function addPlayer() {
       const row = playerResults.insertRow();
       row.insertCell();
+
       const nameCell = row.insertCell();
       nameCell.contentEditable = 'true';
       nameCell.setAttribute('aria-label', 'Player name');
       row.insertCell();
+
+      savePlayerResults();
       return row;
     }
+
+    // Restore player results from this browser's local storage.
     function loadPlayerResults() {
       try {
         const saved = window.localStorage.getItem(STORAGE_KEY);
         if (saved !== null) {
           const results = JSON.parse(saved);
-          if (!Array.isArray(results) || !results.every(player =>
-            player && typeof player.name === 'string' && typeof player.time === 'string')) {
-            throw new Error('Saved player results have an invalid format.');
+          if (!Array.isArray(results)) throw new Error('Saved player results have an invalid format.');
+          for (const result of results) {
+            if (!result || typeof result.name !== 'string' || typeof result.time !== 'string') {
+              throw new Error('Saved player results have an invalid format.');
+            }
           }
+
           while (playerResults.rows.length < results.length) addPlayer();
-          results.forEach((player, index) => {
-            playerResults.rows[index].cells[1].textContent = player.name;
-            playerResults.rows[index].cells[2].textContent = player.time;
-          });
+          for (let index = 0; index < results.length; index++) {
+            playerResults.rows[index].cells[1].textContent = results[index].name;
+            playerResults.rows[index].cells[2].textContent = results[index].time;
+          }
         }
         storageReady = true;
       } catch (error) {
@@ -331,13 +350,18 @@
         storageStatus.textContent = 'Could not load saved player results. Browser storage may be unavailable or the saved data may be invalid.';
       }
     }
+
+    // Save names, times, and added rows so they survive a reload.
     function savePlayerResults() {
       if (!storageReady) return;
       try {
-        const results = [...playerResults.rows].map(row => ({
-          name: row.cells[1].textContent,
-          time: row.cells[2].textContent
-        }));
+        const results = [];
+        for (const row of playerResults.rows) {
+          results.push({
+            name: row.cells[1].textContent,
+            time: row.cells[2].textContent
+          });
+        }
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(results));
         storageStatus.textContent = '';
       } catch (error) {
@@ -345,10 +369,14 @@
         storageStatus.textContent = 'Could not save player results. Browser storage may be unavailable.';
       }
     }
-    document.getElementById('add-player').addEventListener('click', () => {
+
+    // Add a row and focus the player-name cell.
+    function addPlayerAndFocus() {
       addPlayer().cells[1].focus();
-      savePlayerResults();
-    });
+    }
+
+    playerResults.addEventListener('input', updateLeaderboard);
+    document.getElementById('add-player').addEventListener('click', addPlayerAndFocus);
     loadPlayerResults();
     updateLeaderboard();
 
@@ -368,10 +396,10 @@
     let running = false;
     let activeRow;
 
+    // Play a short tone when the timer advances.
     function beep() {
       if (!audioContext || audioContext.state !== 'running') return;
 
-      // Generate a short, quiet tone without needing an audio file.
       const oscillator = audioContext.createOscillator();
       const volume = audioContext.createGain();
       const now = audioContext.currentTime;
@@ -383,17 +411,19 @@
       volume.connect(audioContext.destination);
       oscillator.start(now);
       oscillator.stop(now + 0.1);
-      oscillator.onended = () => {
+      // Disconnect the audio nodes after the tone finishes.
+      oscillator.onended = function disconnectBeep() {
         oscillator.disconnect();
         volume.disconnect();
       };
     }
 
+    // Measure real elapsed time so delayed callbacks do not slow the game.
     function elapsedSeconds() {
-      // Measure real elapsed time so delayed callbacks do not slow the game.
       return Math.min(limitSeconds, Math.floor((performance.now() - startedAt) / 1000));
     }
 
+    // Stop the timer and save the active player's result.
     function finishGame() {
       if (!running) return;
       const seconds = elapsedSeconds();
@@ -407,6 +437,7 @@
       status.textContent = `${seconds === limitSeconds ? 'Time is up. ' : ''}Recorded ${display.textContent}. Click New Game for the next player.`;
     }
 
+    // Refresh the timer display and finish when its limit is reached.
     function updateTimer() {
       if (!running) return;
       const seconds = elapsedSeconds();
@@ -418,9 +449,9 @@
       if (seconds === limitSeconds) finishGame();
     }
 
+    // Enable timer beeps after the user's start-button click.
     async function enableBeeps() {
       try {
-        // Start Now supplies the user click browsers require for audio.
         audioContext ??= new AudioContext();
         await audioContext.resume();
         if (audioContext.state !== 'running') {
@@ -432,19 +463,29 @@
       }
     }
 
-    document.getElementById('timer-settings').addEventListener('submit', (event) => {
+    // Start the timer for the next named player without a recorded time.
+    function startGame(event) {
       event.preventDefault();
       if (running || startButton.disabled || !minutesInput.reportValidity()) return;
 
-      // Use the first named player who does not already have a recorded time.
-      activeRow = [...playerResults.rows].find(row =>
-        row.cells[1].textContent.trim() && !row.cells[2].textContent.trim());
+      activeRow = null;
+      for (const row of playerResults.rows) {
+        if (row.cells[1].textContent.trim() && !row.cells[2].textContent.trim()) {
+          activeRow = row;
+          break;
+        }
+      }
+
       if (!activeRow) {
         status.textContent = 'Enter the next player name in a row with an empty time, then click Start Now.';
-        const emptyRow = [...playerResults.rows].find(row =>
-          !row.cells[1].textContent.trim() && !row.cells[2].textContent.trim());
+        let emptyRow;
+        for (const row of playerResults.rows) {
+          if (!row.cells[1].textContent.trim() && !row.cells[2].textContent.trim()) {
+            emptyRow = row;
+            break;
+          }
+        }
         const row = emptyRow || addPlayer();
-        if (!emptyRow) savePlayerResults();
         row.cells[1].focus();
         return;
       }
@@ -461,17 +502,20 @@
       status.textContent = `Timing ${activeRow.cells[1].textContent.trim()}. Click STOP to record the result.`;
       enableBeeps();
       interval = setInterval(updateTimer, 100);
-    });
+    }
 
-    stopButton.addEventListener('click', finishGame);
-    newGameButton.addEventListener('click', () => {
+    // Reset the display and allow another game to start.
+    function resetGame() {
       if (running) return;
       display.textContent = formatTime(0);
       startButton.disabled = false;
       minutesInput.disabled = false;
       status.textContent = 'Enter a player name below, then click Start Now.';
-    });
+    }
 
+    document.getElementById('timer-settings').addEventListener('submit', startGame);
+    stopButton.addEventListener('click', finishGame);
+    newGameButton.addEventListener('click', resetGame);
     minutesInput.value = DEFAULT_MINUTES;
   </script>
 </body>
